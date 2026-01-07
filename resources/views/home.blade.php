@@ -39,13 +39,7 @@
                             </span>
                         </div>
                         
-                        <!-- وقت جهاز المستخدم -->
-                        <div class="alert alert-warning d-inline-block mt-2">
-                            <i class="fas fa-desktop me-2"></i>
-                            <strong>توقيت جهازك:</strong> 
-                            <span id="client-time" class="fw-bold"></span>
-                        </div>
-                    </div>
+                    
                     
                     <!-- بطاقات الحالة -->
                     <div class="row text-center mb-5">
@@ -176,31 +170,7 @@
                         </div>
                     </div>
                     
-                    <!-- معلومات النظام -->
-                    <div class="alert alert-info mt-4">
-                        <h5 class="d-flex align-items-center">
-                            <i class="fas fa-info-circle me-2"></i>معلومات النظام:
-                        </h5>
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <ul class="mb-0">
-                                    <li><i class="fas fa-check-circle text-success me-2"></i>النظام يعمل في المتصفح فقط</li>
-                                    <li><i class="fas fa-check-circle text-success me-2"></i>يستخدم توقيت جهاز المستخدم</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <ul class="mb-0">
-                                    <li><i class="fas fa-check-circle text-success me-2"></i>حضور مرة واحدة يومياً</li>
-                                    <li><i class="fas fa-check-circle text-success me-2"></i>سرية البيانات مضمونة</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                   
 @endsection
 
 @section('styles')
@@ -240,15 +210,7 @@
         document.getElementById('current-khartoum-time').textContent = `${hours}:${minutes}:${seconds}`;
     }
     
-    // عرض وقت جهاز المستخدم
-    function updateClientTime() {
-        const now = new Date();
-        const hours = now.getHours().toString().padStart(2, '0');
-        const minutes = now.getMinutes().toString().padStart(2, '0');
-        const seconds = now.getSeconds().toString().padStart(2, '0');
-        
-        document.getElementById('client-time').textContent = `${hours}:${minutes}:${seconds}`;
-    }
+   
     
     // تحديث الوقت كل ثانية
     setInterval(updateCurrentTime, 1000);
