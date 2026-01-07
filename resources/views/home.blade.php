@@ -1,328 +1,282 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>نظام الحضور بالوجه</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .card {
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            border: none;
-            margin-bottom: 20px;
-        }
-        .status-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-        }
-        .btn-attendance {
-            padding: 15px 30px;
-            font-size: 18px;
-            border-radius: 50px;
-            margin: 10px;
-            transition: all 0.3s;
-        }
-        .btn-attendance:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-        }
-        .face-status {
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-weight: bold;
-        }
-        .face-registered {
-            background: #d4edda;
-            color: #155724;
-        }
-        .face-not-registered {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .nav-tabs .nav-link.active {
-            background: #4f46e5;
-            color: white;
-            border-radius: 10px;
-        }
-        .attendance-log {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 10px 0;
-        }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/home">
-                <i class="fas fa-fingerprint"></i> نظام الحضور الذكي
-            </a>
-            <div class="navbar-nav">
-                <a class="nav-link" href="/attendance/history">
-                    <i class="fas fa-history"></i> سجل الحضور
-                </a>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="btn btn-link nav-link">
-                        <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
-                    </button>
-                </form>
-            </div>
-        </div>
-    </nav>
+@extends('layouts.app')
 
-    <div class="container mt-4">
-        @if(session('success'))
-            <div class="alert alert-success alert-dismissible fade show">
-                {{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="alert alert-danger alert-dismissible fade show">
-                {{ session('error') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        @endif
-
-        <div class="row">
-            <!-- البطاقة الرئيسية -->
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h4><i class="fas fa-user-circle"></i> مرحباً {{ Auth::user()->name }}</h4>
+@section('content')
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-lg border-0 attendance-card">
+                <div class="card-body p-4">
+                    <h1 class="text-center mb-4 text-primary">
+                        <i class="fas fa-user-check me-2"></i>نظام الحضور بالتعرف على الوجه
+                    </h1>
+                    
+                    @if(session('success'))
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+                    
+                    @if(session('error'))
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    @endif
+                    
+                    <div class="text-center mb-5">
+                        <h3 class="fw-bold">مرحباً {{ Auth::user()->name }} 👋</h3>
+                        <p class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>نظام التعرف على الوجه يعمل في متصفحك مباشرة
+                        </p>
+                        
+                        <!-- وقت الخرطوم الحالي -->
+                        <div class="alert alert-info d-inline-block">
+                            <i class="fas fa-clock me-2"></i>
+                            <strong>توقيت الخرطوم:</strong> 
+                            <span id="current-khartoum-time" class="fw-bold">
+                                {{ \Carbon\Carbon::now('Africa/Khartoum')->format('H:i:s') }}
+                            </span>
+                        </div>
+                        
+                        <!-- وقت جهاز المستخدم -->
+                        <div class="alert alert-warning d-inline-block mt-2">
+                            <i class="fas fa-desktop me-2"></i>
+                            <strong>توقيت جهازك:</strong> 
+                            <span id="client-time" class="fw-bold"></span>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="status-card">
-                                    <h5>حالة الوجه</h5>
-                                    <div class="face-status {{ $hasFace ? 'face-registered' : 'face-not-registered' }}">
+                    
+                    <!-- بطاقات الحالة -->
+                    <div class="row text-center mb-5">
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body p-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-fingerprint fa-3x text-primary mb-3"></i>
+                                        <h4 class="card-title">حالة البصمة</h4>
+                                    </div>
+                                    
+                                    <div class="mb-4">
                                         @if($hasFace)
-                                            <i class="fas fa-check-circle"></i> ✅ مسجل
+                                            <span class="badge bg-success fs-6 p-3">
+                                                <i class="fas fa-check-circle me-2"></i>البصمة مسجلة
+                                            </span>
                                         @else
-                                            <i class="fas fa-times-circle"></i> ❌ غير مسجل
+                                            <span class="badge bg-danger fs-6 p-3">
+                                                <i class="fas fa-exclamation-triangle me-2"></i>البصمة غير مسجلة
+                                            </span>
                                         @endif
                                     </div>
-                                    @if(!$hasFace)
-                                        <a href="/face-camera" class="btn btn-warning mt-3">
-                                            <i class="fas fa-camera"></i> تسجيل بصمة الوجه
+                                    
+                                    <a href="{{ route('face.browser') }}" class="btn btn-lg btn-primary btn-face w-100">
+                                        @if($hasFace)
+                                            <i class="fas fa-redo me-2"></i>تحديث البصمة
+                                        @else
+                                            <i class="fas fa-fingerprint me-2"></i>تسجيل البصمة
+                                        @endif
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body p-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-calendar-check fa-3x text-success mb-3"></i>
+                                        <h4 class="card-title">حضور اليوم</h4>
+                                    </div>
+                                    
+                                    @if($todayAttendance)
+                                        <div class="mb-4">
+                                            <div class="alert alert-success">
+                                                <i class="fas fa-check-circle me-2"></i>تم تسجيل حضور اليوم
+                                            </div>
+                                            <p class="fw-bold">
+                                                <i class="fas fa-clock me-2"></i>
+                                                الوقت: {{ \Carbon\Carbon::parse($todayAttendance->check_in)->timezone('Africa/Khartoum')->format('H:i:s') }}
+                                            </p>
+                                            <p class="text-muted">
+                                                التاريخ: {{ \Carbon\Carbon::parse($todayAttendance->date)->format('Y-m-d') }}
+                                            </p>
+                                        </div>
+                                    @else
+                                        <div class="mb-4">
+                                            <p class="text-muted">لم يتم تسجيل حضور اليوم</p>
+                                        </div>
+                                        
+                                        <!-- زر يوجه إلى صفحة التحقق من الوجه -->
+                                        <a href="{{ route('face.browser') }}?action=attendance" 
+                                           class="btn btn-lg btn-success btn-face w-100" 
+                                           id="mark-attendance-btn">
+                                            <i class="fas fa-sign-in-alt me-2"></i>تسجيل الحضور
                                         </a>
                                     @endif
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- الإحصائيات -->
+                    <div class="row text-center mb-5">
+                        <h3 class="text-center mb-4">
+                            <i class="fas fa-chart-bar me-2 text-info"></i>إحصائيات الشهر
+                        </h3>
+                        
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <i class="fas fa-calendar-day fa-2x text-primary mb-3"></i>
+                                    <h2 class="display-5 fw-bold">{{ $monthAttendances->count() }}</h2>
+                                    <p class="text-muted">أيام الحضور</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <i class="fas fa-user-check fa-2x text-success mb-3"></i>
+                                    <h2 class="display-5 fw-bold">{{ $monthAttendances->where('status', 'present')->count() }}</h2>
+                                    <p class="text-muted">حضور ناجح</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body p-4">
+                                    <i class="fas fa-bullseye fa-2x text-warning mb-3"></i>
+                                    <h2 class="display-5 fw-bold">🎯</h2>
+                                    <p class="text-muted">دقة عالية</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- أزرار التنقل السريع -->
+                    <div class="text-center mb-4">
+                        <h3 class="text-center mb-4">
+                            <i class="fas fa-rocket me-2 text-primary"></i>روابط سريعة
+                        </h3>
+                        
+                        <div class="d-flex flex-wrap justify-content-center gap-3">
+                            <a href="{{ route('attendance.history') }}" class="btn btn-info btn-face">
+                                <i class="fas fa-history me-2"></i>سجل الحضور الكامل
+                            </a>
+                            <a href="{{ route('face.browser') }}" class="btn btn-warning btn-face">
+                                <i class="fas fa-camera me-2"></i>فتح الكاميرا للتحقق
+                            </a>
+                            @if($hasFace)
+                                <button onclick="verifyFace()" class="btn btn-success btn-face">
+                                    <i class="fas fa-user-check me-2"></i>التحقق من الوجه
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                    
+                    <!-- معلومات النظام -->
+                    <div class="alert alert-info mt-4">
+                        <h5 class="d-flex align-items-center">
+                            <i class="fas fa-info-circle me-2"></i>معلومات النظام:
+                        </h5>
+                        <div class="row mt-3">
                             <div class="col-md-6">
-                                <div class="status-card">
-                                    <h5>حضور اليوم</h5>
-                                    @if($todayAttendance)
-                                        <p><strong>الحضور:</strong> {{ $todayAttendance->check_in ? date('H:i', strtotime($todayAttendance->check_in)) : 'لم يسجل' }}</p>
-                                        <p><strong>الانصراف:</strong> {{ $todayAttendance->check_out ? date('H:i', strtotime($todayAttendance->check_out)) : 'لم يسجل' }}</p>
-                                        @if(!$todayAttendance->check_out)
-                                            <button id="checkOutBtn" class="btn btn-danger btn-attendance">
-                                                <i class="fas fa-sign-out-alt"></i> تسجيل انصراف
-                                            </button>
-                                        @endif
-                                    @else
-                                        <p>لم يسجل حضور اليوم</p>
-                                        <button id="checkInBtn" class="btn btn-success btn-attendance">
-                                            <i class="fas fa-sign-in-alt"></i> تسجيل حضور
-                                        </button>
-                                    @endif
-                                </div>
+                                <ul class="mb-0">
+                                    <li><i class="fas fa-check-circle text-success me-2"></i>النظام يعمل في المتصفح فقط</li>
+                                    <li><i class="fas fa-check-circle text-success me-2"></i>يستخدم توقيت جهاز المستخدم</li>
+                                </ul>
                             </div>
-                        </div>
-
-                        <div class="mt-4">
-                            <div id="cameraSection" style="display: none;">
-                                <h5><i class="fas fa-camera"></i> التقط صورة للتحقق</h5>
-                                <div class="text-center">
-                                    <video id="video" width="100%" height="auto" autoplay style="max-width: 500px; border-radius: 10px;"></video>
-                                    <br>
-                                    <button id="captureBtn" class="btn btn-primary mt-2">
-                                        <i class="fas fa-camera"></i> التقاط صورة
-                                    </button>
-                                    <canvas id="canvas" style="display: none;"></canvas>
-                                </div>
+                            <div class="col-md-6">
+                                <ul class="mb-0">
+                                    <li><i class="fas fa-check-circle text-success me-2"></i>حضور مرة واحدة يومياً</li>
+                                    <li><i class="fas fa-check-circle text-success me-2"></i>سرية البيانات مضمونة</li>
+                                </ul>
                             </div>
-                            <div id="result" class="mt-3"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- إحصائيات -->
-                <div class="card mt-3">
-                    <div class="card-header bg-info text-white">
-                        <h5><i class="fas fa-chart-bar"></i> إحصائيات</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row text-center">
-                            <div class="col-md-4">
-                                <h2>{{ $totalDays }}</h2>
-                                <p>أيام الحضور</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h2>✅</h2>
-                                <p>النظام يعمل</p>
-                            </div>
-                            <div class="col-md-4">
-                                <h2>🎯</h2>
-                                <p>دقة عالية</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- الجانب الأيمن -->
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5><i class="fas fa-bolt"></i> إجراءات سريعة</h5>
-                    </div>
-                    <div class="card-body">
-                        <a href="/face-camera" class="btn btn-outline-primary w-100 mb-2">
-                            <i class="fas fa-camera"></i> تسجيل وجه جديد
-                        </a>
-                        <a href="/attendance/history" class="btn btn-outline-info w-100 mb-2">
-                            <i class="fas fa-history"></i> سجل الحضور
-                        </a>
-                        <a href="/test-attendance" class="btn btn-outline-warning w-100 mb-2">
-                            <i class="fas fa-test"></i> صفحة الاختبار
-                        </a>
-                    </div>
-                </div>
-
-                <!-- تعليمات -->
-                <div class="card mt-3">
-                    <div class="card-header bg-warning text-dark">
-                        <h5><i class="fas fa-info-circle"></i> تعليمات الاستخدام</h5>
-                    </div>
-                    <div class="card-body">
-                        <ol>
-                            <li>تأكد من إضاءة جيدة</li>
-                            <li>انظر مباشرة للكاميرا</li>
-                            <li>حاول إبقاء الوجه في المنتصف</li>
-                            <li>النظام يعمل تجريبياً الآن</li>
-                        </ol>
-                        <div class="alert alert-info">
-                            <i class="fas fa-lightbulb"></i> 
-                            <strong>ملاحظة:</strong> هذا نظام تجريبي للاختبار
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
+@endsection
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // عناصر DOM
-        const checkInBtn = document.getElementById('checkInBtn');
-        const checkOutBtn = document.getElementById('checkOutBtn');
-        const cameraSection = document.getElementById('cameraSection');
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const captureBtn = document.getElementById('captureBtn');
-        const resultDiv = document.getElementById('result');
+@section('styles')
+<style>
+    .attendance-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 20px;
+    }
+    
+    .card {
+        border-radius: 15px;
+        transition: transform 0.3s;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+    }
+    
+    #client-time {
+        direction: ltr;
+        display: inline-block;
+    }
+</style>
+@endsection
+
+@section('scripts')
+<script>
+    // تحديث وقت الخرطوم في الصفحة
+    function updateCurrentTime() {
+        const now = new Date();
+        const khartoumTime = new Date(now.getTime() + (2 * 60 * 60 * 1000));
         
-        let currentAction = ''; // 'check_in' أو 'check_out'
-        let stream = null;
-
-        // تشغيل الكاميرا
-        async function startCamera() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" } 
-                });
-                video.srcObject = stream;
-                cameraSection.style.display = 'block';
-            } catch (err) {
-                showResult('❌ خطأ في الكاميرا: ' + err.message, 'danger');
-            }
+        const hours = khartoumTime.getUTCHours().toString().padStart(2, '0');
+        const minutes = khartoumTime.getUTCMinutes().toString().padStart(2, '0');
+        const seconds = khartoumTime.getUTCSeconds().toString().padStart(2, '0');
+        
+        document.getElementById('current-khartoum-time').textContent = `${hours}:${minutes}:${seconds}`;
+    }
+    
+    // عرض وقت جهاز المستخدم
+    function updateClientTime() {
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const seconds = now.getSeconds().toString().padStart(2, '0');
+        
+        document.getElementById('client-time').textContent = `${hours}:${minutes}:${seconds}`;
+    }
+    
+    // تحديث الوقت كل ثانية
+    setInterval(updateCurrentTime, 1000);
+    setInterval(updateClientTime, 1000);
+    updateCurrentTime();
+    updateClientTime();
+    
+    // دالة التحقق من الوجه
+    function verifyFace() {
+        const hasFace = {{ $hasFace ? 'true' : 'false' }};
+        
+        if (!hasFace) {
+            alert('❌ يرجى تسجيل بصمة الوجه أولاً');
+            window.location.href = '{{ route("face.browser") }}';
+            return;
         }
-
-        // إيقاف الكاميرا
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-            cameraSection.style.display = 'none';
+        
+        window.location.href = '{{ route("face.browser") }}?action=verify';
+    }
+    
+    // تفعيل زر تسجيل الحضور
+    document.getElementById('mark-attendance-btn')?.addEventListener('click', function(e) {
+        const hasFace = {{ $hasFace ? 'true' : 'false' }};
+        
+        if (!hasFace) {
+            e.preventDefault();
+            alert('❌ يرجى تسجيل بصمة الوجه أولاً');
         }
-
-        // عرض نتيجة
-        function showResult(message, type = 'success') {
-            resultDiv.innerHTML = `
-                <div class="alert alert-${type} alert-dismissible fade show">
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-        }
-
-        // تسجيل الحضور
-        if (checkInBtn) {
-            checkInBtn.addEventListener('click', () => {
-                currentAction = 'check_in';
-                startCamera();
-            });
-        }
-
-        // تسجيل الانصراف
-        if (checkOutBtn) {
-            checkOutBtn.addEventListener('click', () => {
-                currentAction = 'check_out';
-                startCamera();
-            });
-        }
-
-        // التقاط الصورة
-        captureBtn.addEventListener('click', async () => {
-            const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const imageData = canvas.toDataURL('image/png');
-            
-            // إرسال الطلب
-            showResult('⏳ جاري التحقق من الوجه...', 'info');
-            
-            try {
-                const response = await fetch('/attendance', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    },
-                    body: JSON.stringify({ image: imageData })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    showResult('✅ ' + data.message, 'success');
-                    stopCamera();
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    showResult('❌ ' + data.message, 'danger');
-                }
-            } catch (error) {
-                showResult('❌ خطأ في الاتصال: ' + error.message, 'danger');
-            }
-        });
-    </script>
-</body>
-</html>
+    });
+</script>
+@endsection

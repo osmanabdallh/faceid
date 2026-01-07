@@ -6,14 +6,15 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up(): void
-    {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('employee_code')->unique()->after('email');
-            $table->json('face_encoding')->nullable()->after('employee_code');
-            $table->boolean('is_active')->default(true)->after('face_encoding');
-        });
-    }
+  // في migration إضافة الحقول لجدول users
+public function up()
+{
+    Schema::table('users', function (Blueprint $table) {
+        $table->string('employee_code')->unique()->nullable()->after('email');
+        $table->text('face_encoding')->nullable()->after('employee_code'); // غيرت من json إلى text
+        $table->boolean('is_active')->default(true)->after('face_encoding');
+    });
+}
 
     public function down(): void
     {

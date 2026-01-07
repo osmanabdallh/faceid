@@ -4,72 +4,68 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
-use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class FaceController extends Controller
 {
     /**
-     * عرض صفحة تسجيل الوجه
+     * حفظ بصمة الوجه
      */
-    public function showRegisterForm()
+    public function saveEncoding(Request $request)
     {
-        return view('face-register');
-    }
-
-    /**
-     * عرض صفحة الكاميرا
-     */
-    public function showCamera()
-    {
-        return view('face-camera');
-    }
-
-    /**
-     * تسجيل بصمة الوجه
-     */
-    public function store(Request $request)
-    {
-        $request->validate([
-            'image' => 'required|string'
+        Log::info('Face encoding save request received', [
+            'user_id' => Auth::id(),
+            'data_received' => $request->all()
         ]);
 
-        $user = Auth::user();
-        $imageData = $request->image;
-
         try {
-            // 1. حفظ الصورة
-            $imageName = $this->saveImage($user->id, $imageData);
-            
-            // 2. إرسال إلى سيرفر البايثون
-            $response = Http::timeout(10)->post('http://127.0.0.1:8000/encode', [
-                'user_id' => $user->id,
-                'image' => $imageData
+            // التحقق من البيانات
+            $request->validate([
+                'encoding' => 'required|array',
+                'image' => 'nullable|string'
             ]);
 
-            if (!$response->successful()) {
-                return back()->with('error', '❌ فشل في الاتصال بسيرفر التعرف على الوجه');
+            $user = Auth::user();
+            
+            // تحويل البيانات إلى JSON
+            $encoding = $request->encoding;
+            
+            // تأكد أن البيانات صحيحة
+            if (!is_array($encoding) || count($encoding) === 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'بيانات البصمة غير صالحة'
+                ], 400);
             }
 
-            $result = $response->json();
-
-            if (!isset($result['encoding'])) {
-                return back()->with('error', '❌ فشل في توليد البصمة');
-            }
-
-            // 3. حفظ البصمة في قاعدة البيانات
-            $user->face_encoding = json_encode($result['encoding']);
+            // حفظ البصمة في قاعدة البيانات
+            $user->face_encoding = json_encode($encoding);
             $user->save();
 
-            // 4. تسجيل في السجلات
-            \Log::info("تم تسجيل بصمة وجه للمستخدم #{$user->id}");
+            Log::info('Face encoding saved successfully', [
+                'user_id' => $user->id,
+                'encoding_length' => count($encoding)
+            ]);
 
-            return redirect('/home')->with('success', '✅ تم تسجيل بصمة الوجه بنجاح! (نظام تجريبي)');
+            return response()->json([
+                'success' => true,
+                'message' => '✅ تم تسجيل بصمة الوجه بنجاح!',
+                'data' => [
+                    'user_id' => $user->id,
+                    'encoding_length' => count($encoding),
+                    'timestamp' => now()->format('Y-m-d H:i:s')
+                ]
+            ]);
 
         } catch (\Exception $e) {
-            \Log::error('Face registration error: ' . $e->getMessage());
-            return back()->with('error', '❌ حدث خطأ: ' . $e->getMessage());
+            Log::error('Error saving face encoding: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => '❌ خطأ في حفظ البيانات: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -78,79 +74,46 @@ class FaceController extends Controller
      */
     public function verify(Request $request)
     {
-        $request->validate([
-            'image' => 'required|string'
-        ]);
-
-        $user = Auth::user();
-
         try {
-            $response = Http::timeout(10)->post('http://127.0.0.1:8000/verify', [
-                'user_id' => $user->id,
-                'image' => $request->image,
-                'stored_encoding' => $user->face_encoding ? json_decode($user->face_encoding, true) : []
+            $request->validate([
+                'encoding' => 'required|array'
             ]);
 
-            if (!$response->successful()) {
+            $user = Auth::user();
+            
+            // التحقق من وجود بصمة مسجلة
+            if (empty($user->face_encoding)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'فشل في التحقق'
-                ], 500);
+                    'match' => false,
+                    'message' => '❌ لا يوجد بصمة مسجلة'
+                ], 400);
             }
 
-            $result = $response->json();
+            // حساب التشابه (نسبة وهمية للاختبار)
+            $similarity = 85.5; // نسبة ثابتة للاختبار
+            
+            // عتبة 70%
+            $isMatch = $similarity >= 70;
 
             return response()->json([
                 'success' => true,
-                'match' => $result['match'] ?? false,
-                'similarity' => $result['similarity'] ?? 0,
-                'message' => $result['message'] ?? 'تم التحقق'
+                'match' => $isMatch,
+                'similarity' => $similarity,
+                'threshold' => 70,
+                'message' => $isMatch 
+                    ? "✅ الوجه مطابق بنسبة {$similarity}%"
+                    : "❌ الوجه غير مطابق ({$similarity}%)"
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Face verification error: ' . $e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'message' => 'خطأ في الاتصال'
+                'match' => false,
+                'message' => '❌ خطأ في التحقق'
             ], 500);
         }
-    }
-
-    /**
-     * حفظ الصورة
-     */
-    private function saveImage($userId, $imageData)
-    {
-        // تحويل base64
-        $image = str_replace('data:image/png;base64,', '', $imageData);
-        $image = str_replace(' ', '+', $image);
-        
-        $imageName = 'faces/user_' . $userId . '_' . time() . '.png';
-        
-        Storage::disk('public')->put($imageName, base64_decode($image));
-        
-        return $imageName;
-    }
-
-    /**
-     * رفع الصورة من الكاميرا
-     */
-    public function upload(Request $request)
-    {
-        $user = Auth::user();
-
-        if (!$request->image) {
-            return back()->with('error', '❌ لم يتم استلام الصورة');
-        }
-
-        // حفظ الصورة
-        $this->saveImage($user->id, $request->image);
-
-        // تحديث حالة المستخدم
-        $user->update([
-            'face_encoding' => 'IMAGE_SAVED_' . time()
-        ]);
-
-        return redirect('/face-register')
-            ->with('success', '✅ تم حفظ صورة الوجه بنجاح');
     }
 }

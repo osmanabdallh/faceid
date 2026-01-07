@@ -2,133 +2,149 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Attendance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
+use App\Models\Attendance;
 
 class AttendanceController extends Controller
 {
     /**
-     * تسجيل الحضور/الانصراف
+     * تسجيل الحضور فقط (بدون انصراف)
      */
-    public function store(Request $request)
+    public function markAttendance(Request $request)
     {
-        $user = Auth::user();
-
-        // 1. التحقق من وجود بصمة
-        if (!$user->face_encoding) {
-            return response()->json([
-                'success' => false,
-                'message' => '❌ يرجى تسجيل بصمة الوجه أولاً'
-            ], 400);
-        }
-
-        // 2. إرسال إلى سيرفر البايثون للتحقق
         try {
-            $response = Http::timeout(10)->post('http://127.0.0.1:8000/compare', [
-                'user_id' => $user->id
+            $user = Auth::user();
+
+            // التحقق من وجود بصمة وجه
+            if (empty($user->face_encoding)) {
+                return back()->with('error', '❌ يرجى تسجيل بصمة الوجه أولاً');
+            }
+
+            // الحصول على الوقت الحالي من جهاز المستخدم (JavaScript سيرسله)
+            $clientTime = $request->input('client_time', now());
+            
+            // استخدام توقيت المستخدم أو توقيت الخرطوم
+            $khartoumTime = Carbon::parse($clientTime)->timezone('Africa/Khartoum');
+            $today = $khartoumTime->toDateString();
+            
+            // التحقق إذا تم تسجيل الحضور اليوم
+            $existingAttendance = Attendance::where('user_id', $user->id)
+                ->whereDate('date', $today)
+                ->first();
+
+            if ($existingAttendance) {
+                return back()->with('error', '❌ تم تسجيل حضورك اليوم مسبقاً');
+            }
+
+            // تسجيل حضور جديد
+            Attendance::create([
+                'user_id' => $user->id,
+                'date' => $today,
+                'check_in' => $khartoumTime->toTimeString(),
+                'method' => 'face_recognition',
+                'status' => 'present',
+                'attendance_date' => $khartoumTime->format('Y-m-d H:i:s'), // تاريخ كامل مع الوقت
+                'client_timezone' => $request->input('timezone', 'Africa/Khartoum')
             ]);
 
-            if (!$response->successful()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => '❌ فشل الاتصال بسيرفر التعرف'
-                ], 500);
-            }
-
-            $result = $response->json();
-
-            if (!$result['match']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => '❌ الوجه غير مطابق - حاول مرة أخرى'
-                ], 403);
-            }
+            return back()->with('success', '✅ تم تسجيل الحضور بنجاح - ' . $khartoumTime->format('H:i:s'));
 
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => '❌ خطأ في التحقق: ' . $e->getMessage()
-            ], 500);
+            return back()->with('error', '❌ خطأ: ' . $e->getMessage());
         }
-
-        // 3. التحقق من الحضور المفتوح
-        $today = Carbon::today();
-        $attendance = Attendance::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
-            ->whereNull('check_out')
-            ->first();
-
-        if ($attendance) {
-            // تسجيل الانصراف
-            $attendance->update([
-                'check_out' => Carbon::now(),
-                'status' => 'completed'
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'type' => 'check_out',
-                'message' => '✅ تم تسجيل الانصراف بنجاح',
-                'time' => now()->format('H:i:s'),
-                'date' => now()->format('Y-m-d')
-            ]);
-        }
-
-        // 4. تسجيل حضور جديد
-        Attendance::create([
-            'user_id' => $user->id,
-            'check_in' => Carbon::now(),
-            'date' => $today,
-            'status' => 'present',
-            'method' => 'face_recognition'
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'type' => 'check_in',
-            'message' => '✅ تم تسجيل الحضور بنجاح',
-            'time' => now()->format('H:i:s'),
-            'date' => now()->format('Y-m-d')
-        ]);
     }
 
     /**
-     * عرض سجل الحضور
+     * سجل الحضور
      */
-    public function index()
+    public function history()
     {
         $user = Auth::user();
         $attendances = Attendance::where('user_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
+            ->orderBy('date', 'desc')
+            ->paginate(20);
 
         return view('attendance.history', compact('attendances'));
     }
 
     /**
-     * لوحة التحكم الرئيسية
+     * تسجيل الحضور من صفحة الكاميرا
      */
-    public function dashboard()
+    public function browserAttendance(Request $request)
     {
-        $user = Auth::user();
-        
-        $today = Carbon::today();
-        $todayAttendance = Attendance::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
-            ->first();
+        try {
+            $user = Auth::user();
+            
+            // التحقق من وجود بصمة وجه
+            if (empty($user->face_encoding)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '❌ يرجى تسجيل بصمة الوجه أولاً'
+                ], 400);
+            }
 
-        $totalDays = Attendance::where('user_id', $user->id)
-            ->distinct('date')
-            ->count();
+            // الحصول على وقت المستخدم
+            $clientTime = $request->input('client_time', now());
+            $khartoumTime = Carbon::parse($clientTime)->timezone('Africa/Khartoum');
+            $today = $khartoumTime->toDateString();
+            
+            // التحقق من وجود حضور اليوم
+            $existingAttendance = Attendance::where('user_id', $user->id)
+                ->whereDate('date', $today)
+                ->first();
 
-        return view('home', [
-            'user' => $user,
-            'todayAttendance' => $todayAttendance,
-            'totalDays' => $totalDays,
-            'hasFace' => !empty($user->face_encoding)
-        ]);
+            if ($existingAttendance) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '❌ تم تسجيل حضورك اليوم مسبقاً'
+                ], 400);
+            }
+
+            // تسجيل الحضور
+            Attendance::create([
+                'user_id' => $user->id,
+                'date' => $today,
+                'check_in' => $khartoumTime->toTimeString(),
+                'method' => 'face_recognition',
+                'status' => 'present',
+                'attendance_date' => $khartoumTime->format('Y-m-d H:i:s')
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => '✅ تم تسجيل الحضور بنجاح',
+                'time' => $khartoumTime->format('H:i:s'),
+                'date' => $today
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => '❌ خطأ: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * حذف الحضور (إذا لزم الأمر)
+     */
+    public function deleteAttendance($id)
+    {
+        try {
+            $attendance = Attendance::findOrFail($id);
+            
+            // التحقق من أن الحضور يخص المستخدم الحالي
+            if ($attendance->user_id !== Auth::id()) {
+                return back()->with('error', '❌ غير مصرح لك بحذف هذا الحضور');
+            }
+            
+            $attendance->delete();
+            
+            return back()->with('success', '✅ تم حذف الحضور بنجاح');
+        } catch (\Exception $e) {
+            return back()->with('error', '❌ خطأ: ' . $e->getMessage());
+        }
     }
 }
